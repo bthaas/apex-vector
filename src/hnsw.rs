@@ -129,8 +129,11 @@ impl HnswIndex {
 
             let neighbors = if layer == 0 && !self.nodes[current_node_idx].zero_layer_neighbors.is_empty() {
                 &self.nodes[current_node_idx].zero_layer_neighbors
-            } else {
+            } else if layer < self.nodes[current_node_idx].layers.len() {
                 &self.nodes[current_node_idx].layers[layer]
+            } else {
+                // Node doesn't have this layer, skip
+                continue;
             };
 
             for &neighbor_idx in neighbors {
@@ -165,6 +168,10 @@ impl HnswIndex {
             let mut changed = true;
             while changed {
                 changed = false;
+                // Only search layers that exist for the current entry point
+                if level >= self.nodes[curr_entry].layers.len() {
+                    break;
+                }
                 let neighbors = &self.nodes[curr_entry].layers[level];
                 for &neighbor_idx in neighbors {
                     let d = self.dist(query, &self.nodes[neighbor_idx].vector);
@@ -252,16 +259,19 @@ impl HnswIndex {
              }
          }
          
-         self.nodes.push(new_node);
-         
-         for (l, neighbors) in neighbors_by_level.into_iter().enumerate() {
-             for neighbor_idx in neighbors {
-                 self.nodes[neighbor_idx].layers[l].push(new_id);
-                 if l == 0 {
-                     self.nodes[neighbor_idx].zero_layer_neighbors.push(new_id);
-                 }
-             }
-         }
+        self.nodes.push(new_node);
+        
+        for (l, neighbors) in neighbors_by_level.into_iter().enumerate() {
+            for neighbor_idx in neighbors {
+                // Only add bidirectional edge if neighbor has this layer
+                if l < self.nodes[neighbor_idx].layers.len() {
+                    self.nodes[neighbor_idx].layers[l].push(new_id);
+                    if l == 0 {
+                        self.nodes[neighbor_idx].zero_layer_neighbors.push(new_id);
+                    }
+                }
+            }
+        }
          
          if target_level > self.max_layer {
              self.max_layer = target_level;
